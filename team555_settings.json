@@ -1,0 +1,172 @@
+{
+  "subsystems": [
+    {
+      "devices": [
+        {
+          "key": "phoenix6::CANcoder-9",
+          "kind": "phoenix6",
+          "label": "SW-FL-CANcoder-9"
+        },
+        {
+          "key": "phoenix6::CANcoder-10",
+          "kind": "phoenix6",
+          "label": "SW-FR-CANcoder-10"
+        },
+        {
+          "key": "phoenix6::CANcoder-11",
+          "kind": "phoenix6",
+          "label": "SW-BL-CANcoder-11"
+        },
+        {
+          "key": "phoenix6::CANcoder-12",
+          "kind": "phoenix6",
+          "label": "SW-BR-CANcoder-12"
+        },
+        {
+          "key": "phoenix6::TalonFX-2",
+          "kind": "phoenix6",
+          "label": "SW-FL-Steer-2"
+        },
+        {
+          "key": "phoenix6::TalonFX-3",
+          "kind": "phoenix6",
+          "label": "SW-FR-Drive-3"
+        },
+        {
+          "key": "phoenix6::TalonFX-4",
+          "kind": "phoenix6",
+          "label": "SW-FR-Steer-4"
+        },
+        {
+          "key": "phoenix6::TalonFX-1",
+          "kind": "phoenix6",
+          "label": "SW-FL-Drive-1"
+        },
+        {
+          "key": "phoenix6::TalonFX-6",
+          "kind": "phoenix6",
+          "label": "SW-BL-Steer-6"
+        },
+        {
+          "key": "phoenix6::TalonFX-5",
+          "kind": "phoenix6",
+          "label": "SW-BL-Drtive-5"
+        },
+        {
+          "key": "phoenix6::TalonFX-8",
+          "kind": "phoenix6",
+          "label": "SW-BR-Steer-8"
+        },
+        {
+          "key": "phoenix6::TalonFX-7",
+          "kind": "phoenix6",
+          "label": "SW-BR-Drive-7"
+        }
+      ],
+      "icon": "bi-arrows-move",
+      "id": "smniwcanrcfn",
+      "name": "Drive System"
+    },
+    {
+      "devices": [
+        {
+          "key": "phoenix6::TalonFX-30",
+          "kind": "phoenix6",
+          "label": "Turret-Motor-30"
+        },
+        {
+          "key": "phoenix6::CANcoder-29",
+          "kind": "phoenix6",
+          "label": "Turet-CANcoder-29"
+        },
+        {
+          "key": "phoenix6::TalonFX-31",
+          "kind": "phoenix6",
+          "label": "Flywheel-L-Motor-31"
+        },
+        {
+          "key": "phoenix6::TalonFX-32",
+          "kind": "phoenix6",
+          "label": "Flywheel-L-Motor-32"
+        },
+        {
+          "key": "phoenix6::TalonFX-33",
+          "kind": "phoenix6",
+          "label": "Hood-Motor-33"
+        },
+        {
+          "key": "phoenix6::CANcoder-34",
+          "kind": "phoenix6",
+          "label": "Hood-CANcoder-34"
+        }
+      ],
+      "icon": "bi-crosshair",
+      "id": "smniweseuutc",
+      "name": "Turret"
+    },
+    {
+      "devices": [
+        {
+          "key": "phoenix6::TalonFX-20",
+          "kind": "phoenix6",
+          "label": "Serializer-Motor-20"
+        },
+        {
+          "key": "phoenix6::TalonFX-21",
+          "kind": "phoenix6",
+          "label": "Indexer-Motor-21"
+        }
+      ],
+      "icon": "bi-crosshair",
+      "id": "smnj0yo92tre",
+      "name": "Indexer"
+    },
+    {
+      "devices": [
+        {
+          "key": "phoenix6::CANcoder-39",
+          "kind": "phoenix6",
+          "label": "Pivot-CANcoder-39"
+        },
+        {
+          "key": "phoenix6::TalonFX-40",
+          "kind": "phoenix6",
+          "label": "Pivot-Motor-40"
+        },
+        {
+          "key": "phoenix6::TalonFX-41",
+          "kind": "phoenix6",
+          "label": "Rollers-Motor-41"
+        }
+      ],
+      "icon": "bi-joystick",
+      "id": "smnj12xxh1xd",
+      "name": "Intake"
+    },
+    {
+      "devices": [
+        {
+          "key": "nt::limelight-one@1",
+          "kind": "nt"
+        },
+        {
+          "key": "nt::limelight-three@4",
+          "kind": "nt"
+        },
+        {
+          "key": "nt::limelight-two@2",
+          "kind": "nt"
+        },
+        {
+          "key": "can::Power Distribution Hub",
+          "kind": "can"
+        }
+      ],
+      "icon": "bi-gear",
+      "id": "smnj1ay437gh",
+      "name": "Other"
+    }
+  ],
+  "team": 555,
+  "hide_practice_trends": true
+}

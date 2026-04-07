@@ -1,0 +1,2033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FRC Robot Dashboard — Team 555</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:      #0d1117;
+  --card:    #161b22;
+  --card2:   #1c2230;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --green:   #3fb950;
+  --yellow:  #e3b341;
+  --red:     #f85149;
+  --blue:    #58a6ff;
+  --purple:  #bc8cff;
+  --cyan:    #39d0d8;
+  --orange:  #fb8500;
+  --nav-w:   168px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px;
+  height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+/* ═══ LOADING / ERROR ═══════════════════════════════════════════════ */
+#loadingBar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 300;
+  height: 3px; background: var(--blue); width: 0%; transition: width 0.4s;
+}
+#errorBanner {
+  display: none; flex-shrink: 0;
+  background: #4a0f0f; border-bottom: 1px solid var(--red);
+  padding: 6px 16px; color: var(--red); font-size: 0.85rem;
+}
+
+/* ═══ TOP BAR ═══════════════════════════════════════════════════════ */
+#topbar {
+  flex-shrink: 0; z-index: 100;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px; padding: 8px 16px; flex-wrap: wrap;
+}
+.team-pill { background: #1f3a5f; border-radius: 6px; padding: 3px 10px; font-weight: 600; }
+.match-pill { background: #2d2d0a; border: 1px solid var(--yellow); border-radius: 6px; padding: 3px 12px; font-weight: 600; color: var(--yellow); font-size: 1rem; }
+
+/* ── Timer ── */
+#timerBlock {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px;
+}
+#timerLabel { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); white-space: nowrap; }
+#timerDisplay { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.05em; color: var(--green); min-width: 80px; text-align: center; }
+#timerDisplay.warning { color: var(--yellow); }
+#timerDisplay.urgent  { color: var(--red); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.timer-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 5px; padding: 2px 8px; font-size: 0.75rem; cursor: pointer; }
+.timer-btn:hover { background: var(--card); color: var(--text); }
+#timerSetRow { display: none; align-items: center; gap: 6px; }
+#timerSetInput { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 3px 8px; font-size: 0.85rem; width: 80px; }
+
+/* ── Folder controls ── */
+.folder-row { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+#folderInput { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 10px; min-width: 320px; font-size: 0.82rem; }
+#matchSelect { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 10px; min-width: 230px; font-size: 0.85rem; }
+.btn-blue  { background: #1f6feb; border: none; color: #fff; border-radius: 6px; padding: 4px 13px; font-size: 0.82rem; cursor: pointer; }
+.btn-blue:hover { background: #388bfd; }
+
+/* ── Match period filter toggle ── */
+#filterToggle {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 11px; cursor: pointer;
+  font-size: 0.8rem; user-select: none; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+#filterToggle.active { background: #0d2a14; border-color: var(--green); color: var(--green); }
+#filterToggle.active .filter-dot { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.filter-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; transition: background 0.15s; }
+
+/* ═══ APP BODY (sidenav + content) ══════════════════════════════════ */
+#appBody {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: row;
+  overflow: hidden;
+}
+
+/* ═══ SIDE NAV ═══════════════════════════════════════════════════════ */
+#sidenav {
+  flex-shrink: 0; width: var(--nav-w);
+  background: var(--card); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 10px 0; gap: 2px; overflow: hidden;
+}
+.nav-divider {
+  height: 1px; background: var(--border);
+  margin: 6px 12px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 20px;
+  cursor: pointer; user-select: none;
+  color: var(--muted);
+  font-size: 0.78rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  border-left: 3px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.nav-item i { font-size: 1rem; flex-shrink: 0; }
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.nav-item.nav-active { color: var(--blue); border-left-color: var(--blue); background: rgba(88,166,255,0.07); }
+
+/* ═══ MAIN CONTENT ══════════════════════════════════════════════════ */
+#mainContent {
+  flex: 1; min-width: 0;
+  display: flex; overflow: hidden;
+}
+
+/* Generic page container */
+.page {
+  flex: 1; min-width: 0;
+  display: none;
+}
+.page.page-active { display: flex; }
+
+/* ═══ MATCH PAGE — two-column equal split ════════════════════════════ */
+#pageMatch { flex-direction: row; }
+
+#matchLeft {
+  flex: 1; min-width: 0;
+  overflow-y: auto; padding: 14px 16px;
+  border-right: 1px solid var(--border);
+}
+#matchRight {
+  flex: 1; min-width: 0;
+  overflow-y: auto; padding: 14px 16px;
+}
+
+/* ═══ TRENDS PAGE — single scrollable column ═════════════════════════ */
+#pageTrends {
+  flex-direction: column;
+  overflow-y: auto; padding: 14px 20px;
+}
+
+/* ═══ SHARED COMPONENTS ═══════════════════════════════════════════════ */
+
+/* Panel header */
+.panel-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 2px solid var(--border);
+}
+.panel-title { font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.panel-subtitle { font-size: 0.78rem; color: var(--muted); margin-left: auto; }
+
+/* Stat cards */
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.scard { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; position: relative; }
+.scard-title { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+.scard-val { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.scard-sub { font-size: 0.75rem; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.scard-badge { position: absolute; top: 8px; right: 8px; font-size: 0.62rem; font-weight: 700; padding: 2px 6px; border-radius: 20px; }
+.ok   { color: var(--green); }
+.warn { color: var(--yellow); }
+.crit { color: var(--red); }
+.badge-ok   { background: #0d2a0d; color: var(--green);  border: 1px solid #1a4d1a; }
+.badge-warn { background: #2a200a; color: var(--yellow); border: 1px solid #4d3a00; }
+.badge-crit { background: #2a0d0d; color: var(--red);    border: 1px solid #5c1a1a; }
+.badge-blue { background: #0d1f3a; color: var(--blue);   border: 1px solid #1a3a6e; }
+.badge-gray { background: #1a1a1a; color: var(--muted);  border: 1px solid #333; }
+
+/* Issues */
+.issues-wrap { margin-bottom: 14px; }
+.issues-header { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+.issue-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px;
+  cursor: pointer; opacity: 0.7; transition: opacity 0.15s, box-shadow 0.15s; user-select: none; }
+.chip:hover { opacity: 1; }
+.chip.chip-on { opacity: 1; box-shadow: 0 0 7px currentColor; }
+.chip-has-time { cursor: pointer; }
+.chip-critical { background: #2a0d0d; color: var(--red);    border: 1px solid #5c1a1a; }
+.chip-error    { background: #2a0d0d; color: #ff8080;        border: 1px solid #5c2020; }
+.chip-warning  { background: #2a200a; color: var(--yellow); border: 1px solid #4d3a00; }
+.chip-info     { background: #0d1f3a; color: var(--blue);   border: 1px solid #1a3a6e; }
+.no-issues { font-size: 0.82rem; color: var(--green); padding: 6px 0; }
+
+/* Charts */
+.chart-block { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.chart-label { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 6px; }
+/* Single-column charts in the right panel */
+#matchRight .chart-block canvas { max-height: 200px; }
+
+/* Section divider */
+.sec-label { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin: 12px 0 6px; display: flex; align-items: center; gap: 6px; }
+.sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* Subsystem / device cards */
+.dev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.dev-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  min-width: 0; cursor: pointer; transition: border-color 0.15s; }
+.dev-card:hover { border-color: #444; }
+.dev-card.dev-selected { border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.25); }
+.dev-name { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 6px; }
+.dev-status { font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dot-g { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.dot-r { background: var(--red);   box-shadow: 0 0 5px var(--red); }
+.dot-y { background: var(--yellow);box-shadow: 0 0 5px var(--yellow); }
+.dot-x { background: #555; }
+.dev-metric { font-size: 0.75rem; color: var(--muted); }
+.dev-metric span { color: var(--text); }
+.temp-bar { height: 3px; border-radius: 2px; margin-top: 4px; }
+
+/* Phoenix6 / Hoot device section */
+.bus-can { color: var(--purple); }
+.bus-rio { color: var(--cyan); }
+.phoenix-type { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.fault-list { margin-top: 4px; font-size: 0.65rem; color: var(--yellow); line-height: 1.4; word-break: break-word; }
+.phoenix-loading { color: var(--muted); font-size: 0.8rem; padding: 6px 0; }
+
+/* NT chips */
+.nt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nt-chip { font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--card); display: flex; align-items: center; gap: 5px; }
+
+/* ═══ COMPETITION TRENDS ═══════════════════════════════════════════ */
+.trend-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.tstat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.tstat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+.tstat-val { font-size: 1.4rem; font-weight: 700; }
+.tstat-sub { font-size: 0.72rem; color: var(--muted); }
+
+.trend-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.trend-charts .chart-block { margin-bottom: 0; }
+.trend-charts canvas { max-height: 160px; }
+
+.mtable { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.mtable th { color: var(--muted); font-weight: 600; text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.mtable td { padding: 4px 8px; border-bottom: 1px solid #1a1f28; vertical-align: middle; }
+.mtable tr:hover td { background: var(--card2); cursor: pointer; }
+.mtable tr.sel td { background: #1a2a3a !important; }
+.row-crit td:first-child { border-left: 3px solid var(--red); }
+.row-warn td:first-child { border-left: 3px solid var(--yellow); }
+.row-ok   td:first-child { border-left: 3px solid var(--green); }
+.mini-bar-wrap { width: 60px; display: inline-block; background: #222; border-radius: 2px; height: 6px; vertical-align: middle; }
+.mini-bar { height: 6px; border-radius: 2px; }
+canvas.spark { max-height: 30px; }
+
+/* ═══ SETTINGS PAGE ══════════════════════════════════════════════════ */
+#pageSettings { flex-direction: column; overflow-y: auto; padding: 14px 20px; }
+.settings-cols { display: flex; gap: 16px; flex: 1; min-height: 0; }
+.settings-left { flex: 0 0 360px; display: flex; flex-direction: column; overflow-y: auto; }
+.settings-right { flex: 1; min-width: 0; overflow-y: auto; }
+.settings-input {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 4px 10px; font-size: 0.82rem;
+}
+.settings-input:focus { outline: none; border-color: var(--blue); }
+.save-indicator { font-size: 0.75rem; color: var(--green); opacity: 0; transition: opacity 0.4s; }
+.save-indicator.show { opacity: 1; }
+.fault-mode-btn {
+  background: var(--card2); border: none; color: var(--muted);
+  padding: 5px 14px; font-size: 0.78rem; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.fault-mode-btn:hover { background: var(--border); color: var(--text); }
+.fault-mode-btn.active { background: #1f3a5f; color: var(--blue); font-weight: 600; }
+
+/* Subsystem drop slots */
+.sub-slot {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 8px; transition: border-color 0.15s, background 0.15s;
+}
+.sub-slot.drag-over { border-color: var(--blue); background: rgba(88,166,255,0.06); }
+.sub-slot-header {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sub-slot-name { font-size: 0.82rem; font-weight: 600; flex: 1; }
+.sub-slot-body { padding: 8px; display: flex; flex-wrap: wrap; gap: 5px; min-height: 42px; }
+.drop-hint { font-size: 0.72rem; color: var(--muted); font-style: italic; align-self: center; }
+
+/* Draggable device chips */
+.dchip {
+  font-size: 0.72rem; padding: 3px 6px 3px 9px; border-radius: 20px;
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: grab; user-select: none; border: 1px solid var(--border);
+  background: var(--card2); transition: opacity 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.dchip:hover { box-shadow: 0 0 6px rgba(255,255,255,0.1); }
+.dchip.dragging { opacity: 0.4; cursor: grabbing; }
+.dchip.dchip-can     { border-color: #2a4a5a; color: var(--cyan);   }
+.dchip.dchip-nt      { border-color: #1a3a1a; color: var(--green);  }
+.dchip.dchip-phoenix { border-color: #3a2a5a; color: var(--purple); }
+.dchip-x {
+  color: var(--muted); font-size: 0.85em; line-height: 1;
+  padding-left: 3px; cursor: pointer; border: none; background: none;
+}
+.dchip-x:hover { color: var(--red); }
+
+/* Device pool area */
+.pool-section { margin-bottom: 14px; }
+.pool-drop {
+  border: 1px dashed var(--border); border-radius: 6px;
+  min-height: 38px; padding: 6px; display: flex; flex-wrap: wrap; gap: 5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pool-drop.drag-over { border-color: var(--blue); background: rgba(88,166,255,0.04); }
+.pool-empty { font-size: 0.75rem; color: var(--muted); align-self: center; padding: 2px 4px; }
+
+/* Loading spinner */
+.spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #444; border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+<div id="errorBanner"><i class="bi bi-exclamation-triangle-fill me-2"></i><span id="errorMsg"></span></div>
+
+<!-- ══════════════════════ TOP BAR ══════════════════════ -->
+<div id="topbar">
+  <span class="team-pill" id="teamPill">Team —</span>
+  <span id="robotName" style="color:var(--muted);font-size:0.82rem"></span>
+  <span class="match-pill" id="matchPill">—</span>
+
+  <!-- Countdown timer -->
+  <div id="timerBlock">
+    <span class="timer-btn" id="timerToggleBtn" onclick="toggleTimerSet()" title="Set timer"><i class="bi bi-clock me-1"></i>Next Match</span>
+    <span id="timerDisplay">—:——</span>
+    <div id="timerSetRow">
+      <input id="timerSetInput" type="text" placeholder="MM:SS" maxlength="6"/>
+      <button class="timer-btn" onclick="startTimer()"><i class="bi bi-play-fill"></i></button>
+      <button class="timer-btn" onclick="resetTimer()"><i class="bi bi-stop-fill"></i></button>
+    </div>
+    <button class="timer-btn" onclick="toggleTimerSet()" id="timerEditBtn" style="display:none" title="Edit"><i class="bi bi-pencil"></i></button>
+  </div>
+
+  <div id="filterToggle" class="active" onclick="toggleFilter()" title="Show only enabled (match) period">
+    <span class="filter-dot"></span>
+    <span id="filterLabel">Match Period</span>
+  </div>
+
+  <div class="folder-row">
+    <input id="folderInput" type="text" placeholder="Log folder…" value="{{ default_folder }}"/>
+    <button class="btn-blue" onclick="pickFolder()"><i class="bi bi-folder2-open me-1"></i>Browse…</button>
+    <button class="btn-blue" onclick="scanFolder()" title="Re-scan current folder"><i class="bi bi-arrow-clockwise"></i></button>
+    <select id="matchSelect" onchange="loadMatch(this.value)"><option value="">— select match —</option></select>
+    <button class="btn-blue" onclick="loadLatest()"><i class="bi bi-lightning-charge me-1"></i>Latest</button>
+  </div>
+</div>
+
+<!-- ══════════════════════ APP BODY ══════════════════════ -->
+<div id="appBody">
+
+  <!-- ════ SIDE NAV ════ -->
+  <nav id="sidenav">
+    <div class="nav-item nav-active" id="navMatch" onclick="switchPage('match')">
+      <i class="bi bi-broadcast"></i><span>Match</span>
+    </div>
+    <div class="nav-item" id="navTrends" onclick="switchPage('trends')">
+      <i class="bi bi-graph-up"></i><span>Trends</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" id="navSettings" onclick="switchPage('settings')">
+      <i class="bi bi-gear-fill"></i><span>Settings</span>
+    </div>
+  </nav>
+
+  <!-- ════ MAIN CONTENT ════ -->
+  <div id="mainContent">
+
+    <!-- ══════════ PAGE: MATCH ══════════ -->
+    <div class="page page-active" id="pageMatch">
+
+      <!-- Left column: match summary & hardware -->
+      <div id="matchLeft">
+        <div class="panel-header">
+          <i class="bi bi-broadcast" style="color:var(--blue)"></i>
+          <span class="panel-title" style="color:var(--blue)">Latest Match</span>
+          <span class="panel-subtitle" id="matchFileLabel"></span>
+        </div>
+
+        <!-- Match info strip -->
+        <div id="matchInfoStrip" style="margin-bottom:10px;font-size:0.82rem;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;"></div>
+
+        <!-- Stat cards -->
+        <div class="cards-grid" id="matchCards"></div>
+
+        <!-- Subsystems -->
+        <div id="devGrid"></div>
+
+        <!-- CAN devices -->
+        <div class="sec-label" id="canDevSec" style="display:none"><i class="bi bi-hdd-stack"></i>CAN Devices</div>
+        <div class="dev-grid" id="canDevGrid"></div>
+
+        <!-- Phoenix6 devices (from companion hoot files) -->
+        <div class="sec-label" id="phoenixSec" style="display:none">
+          <i class="bi bi-cpu"></i>Phoenix6 Devices
+          <span class="spinner ms-2" id="phoenixSpinner" style="display:none"></span>
+        </div>
+        <div class="dev-grid" id="phoenixGrid"></div>
+
+        <!-- NT clients -->
+        <div class="sec-label" id="ntSec" style="display:none"><i class="bi bi-router"></i>Network Clients</div>
+        <div class="nt-chips" id="ntChips"></div>
+      </div>
+
+      <!-- Right column: issues + charts -->
+      <div id="matchRight">
+
+        <!-- Device detail (shown when a device card is clicked) -->
+        <div id="deviceDetailWrap" style="display:none;margin-bottom:14px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+          <div id="deviceDetailInner"></div>
+        </div>
+
+        <!-- Issues -->
+        <div class="issues-wrap" id="issuesWrap">
+          <div class="issues-header"><i class="bi bi-exclamation-circle me-1"></i>Issues Detected</div>
+          <div class="issue-chips" id="issueChips"><span class="no-issues"><i class="bi bi-check-circle me-1"></i>No issues detected</span></div>
+        </div>
+
+        <!-- Battery chart -->
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-battery me-1"></i>Battery Voltage</div>
+          <canvas id="battChart"></canvas>
+        </div>
+
+        <!-- CAN chart -->
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-diagram-3 me-1"></i>CAN Bus Utilization</div>
+          <canvas id="canChart"></canvas>
+        </div>
+
+        <!-- Loop chart -->
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-speedometer2 me-1"></i>Loop Cycle (ms)</div>
+          <canvas id="loopChart"></canvas>
+        </div>
+
+      </div><!-- #matchRight -->
+    </div><!-- #pageMatch -->
+
+    <!-- ══════════ PAGE: TRENDS ══════════ -->
+    <div class="page" id="pageTrends">
+      <div class="panel-header">
+        <i class="bi bi-graph-up" style="color:var(--green)"></i>
+        <span class="panel-title" style="color:var(--green)">Competition Trends</span>
+        <span class="spinner ms-2" id="trendsSpinner" style="display:none"></span>
+        <span class="panel-subtitle" id="trendsSubtitle"></span>
+      </div>
+
+      <!-- Aggregate stats strip -->
+      <div class="trend-strip" id="trendStrip"></div>
+
+      <!-- Four trend charts -->
+      <div class="trend-charts" id="trendCharts">
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-battery me-1"></i>Battery Min per Match</div>
+          <canvas id="tBattChart"></canvas>
+        </div>
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-speedometer me-1"></i>Drive Speed (m/s)</div>
+          <canvas id="tSpeedChart"></canvas>
+        </div>
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-thermometer-half me-1"></i>Max Temperature (°C)</div>
+          <canvas id="tTempChart"></canvas>
+        </div>
+        <div class="chart-block">
+          <div class="chart-label"><i class="bi bi-exclamation-triangle me-1"></i>Issues per Match</div>
+          <canvas id="tIssueChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Per-match detail table -->
+      <div class="sec-label"><i class="bi bi-table"></i>All Matches</div>
+      <div style="overflow-x:auto">
+        <table class="mtable" id="matchTable">
+          <thead><tr>
+            <th>Match</th>
+            <th>Batt Min</th>
+            <th>Brownouts</th>
+            <th>Spd Max</th>
+            <th>Spd Avg</th>
+            <th>CAN%</th>
+            <th>Overruns</th>
+            <th>Temp</th>
+            <th>Net</th>
+            <th>⚠</th>
+            <th>Issues</th>
+          </tr></thead>
+          <tbody id="matchTableBody"></tbody>
+        </table>
+      </div>
+    </div><!-- #pageTrends -->
+
+    <!-- ══════════ PAGE: SETTINGS ══════════ -->
+    <div class="page" id="pageSettings">
+      <div class="panel-header">
+        <i class="bi bi-gear-fill" style="color:var(--purple)"></i>
+        <span class="panel-title" style="color:var(--purple)">Settings</span>
+        <span class="panel-subtitle" id="settingsTeamLabel"></span>
+        <span class="save-indicator ms-2" id="saveIndicator"><i class="bi bi-check2 me-1"></i>Saved</span>
+      </div>
+
+      <!-- Phoenix6 fault mode toggle -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
+        <i class="bi bi-cpu" style="color:var(--purple)"></i>
+        <span style="font-size:0.82rem;font-weight:600">Phoenix6 Fault Mode</span>
+        <span style="font-size:0.75rem;color:var(--muted);flex:1">Controls which fault data is shown on device cards and detail panels.</span>
+        <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button id="faultModeBtn_faults" class="fault-mode-btn" onclick="setFaultMode('faults')">
+            <i class="bi bi-exclamation-circle me-1"></i>Faults
+          </button>
+          <button id="faultModeBtn_sticky" class="fault-mode-btn" onclick="setFaultMode('sticky')">
+            <i class="bi bi-pin-angle me-1"></i>Sticky Faults
+          </button>
+        </div>
+        <span style="font-size:0.7rem;color:var(--muted)" id="faultModeNote"></span>
+      </div>
+
+      <!-- Hide Practice Matches from Trends toggle -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
+        <i class="bi bi-graph-up" style="color:var(--purple)"></i>
+        <span style="font-size:0.82rem;font-weight:600">Trends Charts</span>
+        <span style="font-size:0.75rem;color:var(--muted);flex:1">Hide Practice matches from all trends charts and the match table.</span>
+        <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button id="hidePracticeBtn_show" class="fault-mode-btn" onclick="setHidePracticeTrends(false)">
+            <i class="bi bi-eye me-1"></i>Show All
+          </button>
+          <button id="hidePracticeBtn_hide" class="fault-mode-btn" onclick="setHidePracticeTrends(true)">
+            <i class="bi bi-eye-slash me-1"></i>Hide Practice
+          </button>
+        </div>
+      </div>
+
+      <!-- Subsystem editor: left = subsystem list, right = device pool -->
+      <div class="settings-cols">
+
+        <!-- LEFT: subsystem manager -->
+        <div class="settings-left">
+          <div class="sec-label"><i class="bi bi-grid-3x3-gap"></i>Subsystems</div>
+
+          <!-- Add new subsystem -->
+          <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+            <input id="newSubName" class="settings-input" type="text" placeholder="Name…" style="flex:1;min-width:100px"/>
+            <select id="newSubIcon" class="settings-input" style="max-width:140px">
+              <option value="bi-arrows-move">Drive</option>
+              <option value="bi-lightning-charge">Shooter</option>
+              <option value="bi-fan">Flywheel</option>
+              <option value="bi-crosshair">Turret</option>
+              <option value="bi-camera-video">Vision</option>
+              <option value="bi-robot">Arm</option>
+              <option value="bi-joystick">Intake</option>
+              <option value="bi-tools">Elevator</option>
+              <option value="bi-battery-charging">Power</option>
+              <option value="bi-cpu">Compute</option>
+              <option value="bi-gear">Other</option>
+            </select>
+            <button class="btn-blue" onclick="addSubsystem()"><i class="bi bi-plus-lg me-1"></i>Add</button>
+          </div>
+
+          <!-- Subsystem drop slots (rendered by JS) -->
+          <div id="subsystemSlots" style="flex:1;overflow-y:auto"></div>
+        </div>
+
+        <!-- RIGHT: unassigned device pool -->
+        <div class="settings-right">
+          <div class="sec-label"><i class="bi bi-hdd-stack"></i>Unassigned Devices
+            <span style="font-size:0.7rem;font-weight:400;color:var(--muted);margin-left:6px">drag into a subsystem</span>
+          </div>
+
+          <div class="pool-section">
+            <div class="issues-header"><i class="bi bi-hdd-stack me-1"></i>CAN Devices</div>
+            <div class="pool-drop" id="poolCAN"
+                 ondragover="event.preventDefault();this.classList.add('drag-over')"
+                 ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('drag-over')"
+                 ondrop="dropToPool(event,'can')">
+              <span class="pool-empty" id="poolCANEmpty">No CAN devices detected in current match</span>
+            </div>
+          </div>
+
+          <div class="pool-section">
+            <div class="issues-header"><i class="bi bi-cpu me-1"></i>Phoenix6 Devices</div>
+            <div class="pool-drop" id="poolPhoenix"
+                 ondragover="event.preventDefault();this.classList.add('drag-over')"
+                 ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('drag-over')"
+                 ondrop="dropToPool(event,'phoenix6')">
+              <span class="pool-empty" id="poolPhoenixEmpty">No Phoenix6 devices detected</span>
+            </div>
+          </div>
+
+          <div class="pool-section">
+            <div class="issues-header"><i class="bi bi-router me-1"></i>Network Clients</div>
+            <div class="pool-drop" id="poolNT"
+                 ondragover="event.preventDefault();this.classList.add('drag-over')"
+                 ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('drag-over')"
+                 ondrop="dropToPool(event,'nt')">
+              <span class="pool-empty" id="poolNTEmpty">No network clients detected</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- .settings-cols -->
+    </div><!-- #pageSettings -->
+
+  </div><!-- #mainContent -->
+</div><!-- #appBody -->
+
+<script>
+'use strict';
+// ══════════════════════════════════════════════════════════════════
+// State
+// ══════════════════════════════════════════════════════════════════
+let charts = {};
+let timerInterval = null;
+let timerEndMs = null;
+let timerRunning = false;
+let filterMatchOnly = true;
+let currentData = null;
+let issueLines = [];
+let activeIssueLines = new Set();
+
+// Settings / subsystem state
+let subsystemSettings = { subsystems: [] };
+let selectedDeviceKey = null;
+let lastSettingsTeam = null;
+let allDevices = { can: [], nt: [], phoenix6: [] };
+let dragKey = null;  // key of chip currently being dragged
+let faultMode = 'faults';  // 'faults' | 'sticky'
+let hidePracticeTrends = false;  // hide Practice matches from trends charts
+let lastTrendsData = null;  // cached trends data for re-rendering
+
+// ══════════════════════════════════════════════════════════════════
+// Boot
+// ══════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  scanFolder(true);
+  // Event delegation: clicking any dev-card in the subsystem grid selects it
+  document.getElementById('devGrid').addEventListener('click', e => {
+    const card = e.target.closest('.dev-card[data-devkey]');
+    if (!card) { deselectDevice(); return; }
+    const key = card.dataset.devkey;
+    if (key === selectedDeviceKey) { deselectDevice(); return; }
+    selectDevice(key);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Page navigation
+// ══════════════════════════════════════════════════════════════════
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('page-active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('nav-active'));
+  const pageId = 'page' + name[0].toUpperCase() + name.slice(1);
+  const navId  = 'nav'  + name[0].toUpperCase() + name.slice(1);
+  document.getElementById(pageId).classList.add('page-active');
+  document.getElementById(navId).classList.add('nav-active');
+  if (name === 'trends') loadTrends();
+  if (name === 'settings') renderSettingsPage();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Countdown Timer
+// ══════════════════════════════════════════════════════════════════
+function toggleTimerSet() {
+  const row = document.getElementById('timerSetRow');
+  const editBtn = document.getElementById('timerEditBtn');
+  const toggleBtn = document.getElementById('timerToggleBtn');
+  const showing = row.style.display === 'flex';
+  row.style.display = showing ? 'none' : 'flex';
+  editBtn.style.display = showing ? 'none' : 'block';
+  toggleBtn.style.display = showing ? 'inline-flex' : 'none';
+  if (!showing) document.getElementById('timerSetInput').focus();
+}
+
+function startTimer() {
+  const raw = document.getElementById('timerSetInput').value.trim();
+  let totalSec = 0;
+  const parts = raw.split(':');
+  if (parts.length === 2) {
+    totalSec = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  } else if (parts.length === 1) {
+    totalSec = parseInt(parts[0]) * 60;
+  }
+  if (!totalSec || isNaN(totalSec)) return;
+  timerEndMs = Date.now() + totalSec * 1000;
+  timerRunning = true;
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(tickTimer, 500);
+  tickTimer();
+  document.getElementById('timerSetRow').style.display = 'none';
+  document.getElementById('timerEditBtn').style.display = 'block';
+  document.getElementById('timerToggleBtn').style.display = 'none';
+}
+
+function resetTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerRunning = false;
+  timerEndMs = null;
+  const disp = document.getElementById('timerDisplay');
+  disp.textContent = '—:——';
+  disp.className = '';
+  document.getElementById('timerSetInput').value = '';
+}
+
+function tickTimer() {
+  if (!timerEndMs) return;
+  const rem = Math.max(0, Math.round((timerEndMs - Date.now()) / 1000));
+  const mins = Math.floor(rem / 60);
+  const secs = rem % 60;
+  const disp = document.getElementById('timerDisplay');
+  disp.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+  disp.className = rem <= 60 ? 'urgent' : rem <= 180 ? 'warning' : '';
+  if (rem === 0) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    disp.textContent = 'GO!';
+    disp.className = 'urgent';
+  }
+}
+
+document.getElementById('timerSetInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startTimer();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Folder / match scanning
+// ══════════════════════════════════════════════════════════════════
+async function pickFolder() {
+  const r = await fetchJSON('/api/pick_folder');
+  if (r.error) { showError(r.error); return; }
+  if (!r.folder) return;  // user cancelled
+  document.getElementById('folderInput').value = r.folder;
+  await scanFolder(false);
+}
+
+async function scanFolder(autoLoad = false) {
+  const folder = document.getElementById('folderInput').value.trim();
+  if (!folder) return;
+  setLoading(true);
+  try {
+    const r = await fetchJSON(`/api/scan?folder=${enc(folder)}`);
+    if (r.error) { showError(r.error); return; }
+    buildMatchSelect(r.matches);
+    // Persist the folder in team settings whenever we have a team context
+    if (lastSettingsTeam !== null && subsystemSettings.folder !== folder) {
+      subsystemSettings.folder = folder;
+      trendsLoaded = false;  // invalidate cached trends for old folder
+      saveSettings();
+    }
+    if (autoLoad && r.latest) {
+      document.getElementById('matchSelect').value = r.latest.filepath;
+      await loadMatch(r.latest.filepath);
+    }
+  } finally { setLoading(false); }
+}
+
+function buildMatchSelect(matches) {
+  const sel = document.getElementById('matchSelect');
+  sel.innerHTML = '<option value="">— select match —</option>';
+  const compMatches = matches.filter(m => m.is_competition);
+  const typeOrder = { Q: 0, P: 1, E: 2 };
+  const grouped = {};
+  compMatches.forEach(m => {
+    const g = m.event || 'Competition';
+    (grouped[g] = grouped[g] || []).push(m);
+  });
+  Object.entries(grouped).sort().forEach(([eventName, items]) => {
+    const og = document.createElement('optgroup');
+    og.label = eventName;
+    items.sort((a, b) => {
+      const ta = typeOrder[a.match_type_code] ?? 9;
+      const tb = typeOrder[b.match_type_code] ?? 9;
+      if (ta !== tb) return ta - tb;
+      return parseInt(a.match_number || 0) - parseInt(b.match_number || 0);
+    });
+    items.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.filepath;
+      o.textContent = m.display_label || m.label;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function toggleFilter() {
+  filterMatchOnly = !filterMatchOnly;
+  const btn = document.getElementById('filterToggle');
+  const lbl = document.getElementById('filterLabel');
+  if (filterMatchOnly) {
+    btn.classList.add('active');
+    lbl.textContent = 'Match Period';
+  } else {
+    btn.classList.remove('active');
+    lbl.textContent = 'Full Log';
+  }
+  if (currentData) renderMatch(currentData);
+}
+
+async function loadLatest() {
+  const folder = document.getElementById('folderInput').value.trim();
+  const r = await fetchJSON(`/api/scan?folder=${enc(folder)}`);
+  if (r.latest) {
+    document.getElementById('matchSelect').value = r.latest.filepath;
+    loadMatch(r.latest.filepath);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Latest Match rendering
+// ══════════════════════════════════════════════════════════════════
+async function loadMatch(filepath) {
+  if (!filepath) return;
+  setLoading(true);
+  hideError();
+  try {
+    const d = await fetchJSON(`/api/match?file=${enc(filepath)}`);
+    if (d.error) { showError(d.error); return; }
+    currentData = d;
+    const team = (d.robot && d.robot.team) || 0;
+    if (team !== lastSettingsTeam) await loadSettingsForTeam(team);
+    renderMatch(d);
+    loadHootDevices(filepath, d.companion_files);
+  } finally { setLoading(false); }
+}
+
+function renderMatch(d) {
+  deselectDevice();
+  // Topbar
+  document.getElementById('teamPill').textContent = `Team ${d.robot.team || '—'}`;
+  const proj = [d.robot.project, d.robot.branch].filter(Boolean).join(' / ');
+  document.getElementById('robotName').textContent = proj ? `"${proj}"` : '';
+  const ev = d.match.event;
+  document.getElementById('matchPill').textContent = `${ev ? ev + ' · ' : ''}${d.match.label || d.match.type || '—'}`;
+  document.getElementById('matchFileLabel').textContent = d.file;
+
+  // Match info strip
+  const t = d.timing;
+  const m = d.match;
+  const infoItems = [
+    m.event   ? `<strong>${m.event}</strong>` : null,
+    m.type    ? `<span>${m.type}</span>` : null,
+    m.fms_attached ? `<span class="ok"><i class="bi bi-check-circle me-1"></i>FMS</span>` : null,
+    t.auto_duration_s   ? `Auto: ${t.auto_duration_s.toFixed(1)}s`   : null,
+    t.teleop_duration_s ? `Teleop: ${t.teleop_duration_s.toFixed(1)}s` : null,
+    `Duration: ${t.total_duration_s}s`,
+  ].filter(Boolean);
+  document.getElementById('matchInfoStrip').innerHTML = infoItems.join('<span style="color:var(--border)"> │ </span>');
+
+  // Pick filtered or full stats based on toggle
+  const useFiltered = filterMatchOnly && d.match_stats;
+  const batt = useFiltered ? d.match_stats.battery    : d.battery;
+  const can  = useFiltered ? d.match_stats.can_bus    : d.can_bus;
+  const perf = useFiltered ? d.match_stats.performance : d.performance;
+
+  renderMatchCards(d, batt, can, perf);
+  renderIssues(d.issues);
+  renderMatchCharts(batt, can, perf, d.timing);
+  renderDevGrid(d.can_devices || [], d.nt_clients || {});
+
+  // Reset Phoenix6 section (populated asynchronously)
+  document.getElementById('phoenixSec').style.display = 'none';
+  document.getElementById('phoenixGrid').innerHTML = '';
+}
+
+function renderMatchCards(d, b, c, p) {
+  b  = b  || d.battery;
+  c  = c  || d.can_bus;
+  p  = p  || d.performance;
+  const r = d.radio, pw = d.power;
+  const drive = (d.subsystems || {}).Drive || {};
+
+  const cards = [
+    {
+      title: 'Battery',
+      val: b.mean ? b.mean.toFixed(2) + 'V' : '—',
+      sub: `Min: ${b.min || '—'}V&nbsp;&nbsp;Max: ${b.max || '—'}V<br>${b.brownout_count ? `<span class="crit">⚡ ${b.brownout_count} brownout(s)</span>` : 'No brownouts'}`,
+      badge: b.brownout_count > 0 ? ['BROWNOUT', 'badge-crit'] : b.min < 6.5 ? ['CRITICAL', 'badge-crit'] : b.min < 8 ? ['LOW', 'badge-warn'] : ['OK', 'badge-ok'],
+      valClass: b.brownout_count > 0 || b.min < 6.5 ? 'crit' : b.min < 8 ? 'warn' : 'ok',
+    },
+    {
+      title: 'CAN Bus',
+      val: c.max_utilization ? (c.max_utilization*100).toFixed(0) + '%' : '—',
+      sub: `Avg ${(c.mean_utilization*100).toFixed(0)}%<br>RX Err: ${c.rx_error_count||0} &nbsp;TX Err: ${c.tx_error_count||0} &nbsp;Off: ${c.off_count||0}`,
+      badge: c.max_utilization > 0.8 ? ['CRITICAL','badge-crit'] : c.max_utilization > 0.65 ? ['HIGH','badge-warn'] : ['OK','badge-ok'],
+      valClass: c.max_utilization > 0.8 ? 'crit' : c.max_utilization > 0.65 ? 'warn' : 'ok',
+    },
+    {
+      title: 'Loop / CPU',
+      val: p.mean_cycle_ms ? p.mean_cycle_ms.toFixed(1) + 'ms' : '—',
+      sub: `P95: ${p.p95_cycle_ms||'—'}ms<br>Overruns: ${p.overrun_count||0} &nbsp;CPU: ${p.cpu_temp_max||'—'}°C`,
+      badge: p.severe_overrun_count > 5 ? ['SEVERE','badge-crit'] : p.overrun_count > 15 ? ['OVERRUNS','badge-warn'] : ['OK','badge-ok'],
+      valClass: p.severe_overrun_count > 5 ? 'crit' : p.overrun_count > 15 ? 'warn' : 'ok',
+    },
+    {
+      title: 'Radio',
+      val: r.connected ? 'Online' : 'Offline',
+      sub: `Drops: ${r.drop_count||0}`,
+      badge: r.connected ? ['OK','badge-ok'] : ['OFFLINE','badge-crit'],
+      valClass: r.connected ? 'ok' : 'crit',
+    },
+  ];
+
+  document.getElementById('matchCards').innerHTML = cards.map(c => `
+    <div class="scard">
+      <div class="scard-title">${c.title}</div>
+      <div class="scard-val ${c.valClass}">${c.val}</div>
+      <div class="scard-sub">${c.sub}</div>
+      <span class="scard-badge ${c.badge[1]}">${c.badge[0]}</span>
+    </div>`).join('');
+}
+
+// Returns the times from an issue that are within the current chart view window
+function getVisibleTimes(issue) {
+  const times = issue.times || [];
+  if (!times.length) return [];
+  if (filterMatchOnly && currentData && currentData.match_stats) {
+    const {start, end} = currentData.match_stats.period;
+    return times.filter(t => t >= start && t <= end);
+  }
+  return times;
+}
+
+function renderIssues(issues) {
+  issueLines = issues || [];
+  activeIssueLines.clear();
+  const chips = document.getElementById('issueChips');
+  if (!issues || !issues.length) {
+    chips.innerHTML = '<span class="no-issues"><i class="bi bi-check-circle me-1"></i>No issues detected</span>';
+    return;
+  }
+  const visible = issues.filter(i => {
+    const times = i.times || [];
+    if (!times.length) return true;
+    const vt = getVisibleTimes(i);
+    return vt.length > 0;
+  });
+  if (!visible.length) {
+    chips.innerHTML = '<span class="no-issues"><i class="bi bi-check-circle me-1"></i>No issues in this period</span>';
+    return;
+  }
+  const iconMap = {critical:'bi-x-circle-fill', error:'bi-exclamation-circle-fill', warning:'bi-exclamation-triangle-fill', info:'bi-info-circle-fill'};
+  chips.innerHTML = visible.map(i => {
+    const origIdx = issues.indexOf(i);
+    const vt = getVisibleTimes(i);
+    const hasTime = vt.length > 0;
+    const countSuffix = vt.length > 0 ? ` <span style="opacity:0.7">×${vt.length}</span>` : '';
+    const title = hasTime
+      ? `Click to show ${vt.length} occurrence${vt.length > 1 ? 's' : ''} on charts`
+      : 'No timestamp in this period';
+    return `<span class="chip chip-${i.severity}${hasTime ? ' chip-has-time' : ''}" data-idx="${origIdx}" title="${title}"
+      onclick="toggleIssueLine(${origIdx})"><i class="bi ${iconMap[i.severity]||'bi-dot'}"></i>${esc(i.message)}${countSuffix}</span>`;
+  }).join('');
+}
+
+function toggleIssueLine(idx) {
+  const issue = issueLines[idx];
+  if (!issue || !getVisibleTimes(issue).length) return;
+  const el = document.querySelector(`.chip[data-idx="${idx}"]`);
+  if (activeIssueLines.has(idx)) {
+    activeIssueLines.delete(idx);
+    if (el) el.classList.remove('chip-on');
+  } else {
+    activeIssueLines.add(idx);
+    if (el) el.classList.add('chip-on');
+  }
+  ['battChart', 'canChart', 'loopChart'].forEach(id => {
+    if (charts[id]) charts[id].update('none');
+  });
+}
+
+// ── Match charts ────────────────────────────────
+function renderMatchCharts(battery, can, perf, timing) {
+  destroyChart('battChart');
+  const bTL = battery.voltage_timeline || [];
+  const cMin = battery.chart_min || 4, cMax = battery.chart_max || 14;
+  charts.battChart = new Chart(document.getElementById('battChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: bTL.map(p => p[0].toFixed(1)),
+      datasets: [{ label: 'V', data: bTL.map(p => p[1]),
+        borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,0.07)',
+        borderWidth:1.5, pointRadius:0, tension:0.2, fill:true }]
+    },
+    options: mkLineOpts(cMin, cMax, 'Volts'),
+    plugins: [threshPlugin([[6.3,'#f85149','Brownout 6.3V'],[8.0,'#e3b341','Low 8V']], timing), issueLinesPlugin()]
+  });
+
+  destroyChart('canChart');
+  const cTL  = can.utilization_timeline || [];
+  const rxTL = can.rx_error_timeline    || [];
+  const txTL = can.tx_error_timeline    || [];
+  const errMax = Math.max(1, ...rxTL.map(p => p[1]), ...txTL.map(p => p[1]));
+  charts.canChart = new Chart(document.getElementById('canChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: cTL.map(p => p[0].toFixed(1)),
+      datasets: [
+        { label: 'Util %', data: cTL.map(p => +(p[1]*100).toFixed(1)),
+          yAxisID: 'y',
+          borderColor:'#bc8cff', backgroundColor:'rgba(188,140,255,0.07)',
+          borderWidth:1.5, pointRadius:0, tension:0.3, fill:true },
+        { label: 'RX Err', data: rxTL.map(p => p[1]),
+          yAxisID: 'y1',
+          borderColor:'#f85149', backgroundColor:'transparent',
+          borderWidth:1.5, pointRadius:0, tension:0, stepped:true },
+        { label: 'TX Err', data: txTL.map(p => p[1]),
+          yAxisID: 'y1',
+          borderColor:'#fb8500', backgroundColor:'transparent',
+          borderWidth:1.5, pointRadius:0, tension:0, stepped:true },
+      ]
+    },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: true, labels: { color:'#8b949e', font:{size:9}, boxWidth:10, padding:8 } } },
+      scales: {
+        x:  { ticks:{color:'#8b949e', maxTicksLimit:7, font:{size:9}}, grid:{color:'#21262d'},
+               title:{display:true, text:'Time (s)', color:'#8b949e', font:{size:9}} },
+        y:  { min:0, max:100, position:'left',
+               ticks:{color:'#8b949e', font:{size:9}}, grid:{color:'#21262d'},
+               title:{display:true, text:'Util %', color:'#8b949e', font:{size:9}} },
+        y1: { min:0, max: Math.ceil(errMax * 1.2), position:'right',
+               ticks:{color:'#8b949e', font:{size:9}, precision:0}, grid:{drawOnChartArea:false},
+               title:{display:true, text:'Errors', color:'#8b949e', font:{size:9}} },
+      }
+    },
+    plugins: [threshPlugin([[65,'#e3b341',''],[80,'#f85149','']], timing), issueLinesPlugin()]
+  });
+
+  destroyChart('loopChart');
+  const lTL = perf.cycle_timeline || [];
+  charts.loopChart = new Chart(document.getElementById('loopChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: lTL.map(p => p[0].toFixed(1)),
+      datasets: [{ label: 'ms', data: lTL.map(p => Math.min(p[1], 200)),
+        borderColor:'#3fb950', backgroundColor:'rgba(63,185,80,0.07)',
+        borderWidth:1.5, pointRadius:0, tension:0.2, fill:true }]
+    },
+    options: mkLineOpts(0, null, 'ms'),
+    plugins: [threshPlugin([[25,'#e3b341',''],[100,'#f85149','']], timing), issueLinesPlugin()]
+  });
+}
+
+// ── Device rendering helpers ─────────────────────
+function canDevCard(dev, displayName) {
+  const label = displayName || dev.name;
+  const busLbl = dev.bus === 'drivetrain' ? '<span class="bus-can">CANivore</span>' : '<span class="bus-rio">RIO CAN</span>';
+  const dc = dev.connected === false ? 'dot-r' : dev.connected ? 'dot-g' : 'dot-x';
+  let inner = `<div class="dev-name">${busLbl}&nbsp;${esc(label)}</div>`;
+  inner += `<div class="dev-status"><span class="dot ${dc}"></span><span class="${dev.connected === false ? 'crit' : 'ok'}">${dev.connected === false ? 'Disconnected' : 'Connected'}</span></div>`;
+  if (dev.max_current_a) inner += mtr('Peak', `${dev.max_current_a}A`);
+  if (dev.max_temp_c && dev.max_temp_c > 0) {
+    inner += mtr('Temp', `${dev.max_temp_c}°C`, tempColor(dev.max_temp_c));
+    inner += tempBar(dev.max_temp_c);
+  }
+  if (dev.note) inner += `<div class="dev-metric">${esc(dev.note)}</div>`;
+  return `<div class="dev-card" data-devkey="can::${esc(dev.name)}">${inner}</div>`;
+}
+
+// ── Subsystems + CAN + NT ──────────────────────
+function renderDevGrid(canDevices, ntClients) {
+  allDevices.can = canDevices || [];
+  allDevices.nt  = Object.entries(ntClients || {}).map(([k, v]) => ({ name: k, connected: v }));
+
+  const subs = subsystemSettings.subsystems || [];
+  const hasSubs = subs.length > 0;
+  const assignedKeys = new Set(subs.flatMap(s => (s.devices || []).map(d => d.key)));
+
+  // ── User-defined subsystem groups ────────────────────────────────
+  const devGrid = document.getElementById('devGrid');
+  devGrid.innerHTML = '';
+
+  if (!hasSubs) {
+    // No subsystems defined: show a hint
+    devGrid.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;padding:4px 0">
+      <i class="bi bi-info-circle me-1"></i>No subsystems configured.
+      <span style="cursor:pointer;color:var(--blue)" onclick="switchPage('settings')">Set up subsystems →</span>
+    </div>`;
+  } else {
+    subs.forEach(sub => {
+      const label = document.createElement('div');
+      label.className = 'sec-label';
+      label.innerHTML = `<i class="bi ${sub.icon || 'bi-gear'} me-1"></i>${esc(sub.name)}`;
+      devGrid.appendChild(label);
+
+      const grid = document.createElement('div');
+      grid.className = 'dev-grid';
+
+      (sub.devices || []).forEach(dRef => {
+        const displayName = dRef.label || dRef.key.replace(/^(can|nt|phoenix6)::/, '');
+        if (dRef.key.startsWith('can::')) {
+          const dev = (canDevices || []).find(d => 'can::' + d.name === dRef.key);
+          if (dev) grid.innerHTML += canDevCard(dev, displayName);
+        } else if (dRef.key.startsWith('nt::')) {
+          const rawName = dRef.key.slice(4);
+          if (rawName in (ntClients || {})) {
+            const ok = ntClients[rawName];
+            grid.innerHTML += `<div class="dev-card" data-devkey="nt::${esc(rawName)}">
+              <div class="dev-name"><i class="bi bi-router me-1"></i>${esc(displayName)}</div>
+              <div class="dev-status"><span class="dot ${ok ? 'dot-g' : 'dot-r'}"></span><span class="${ok ? 'ok' : 'crit'}">${ok ? 'Connected' : 'Offline'}</span></div>
+            </div>`;
+          }
+        } else if (dRef.key.startsWith('phoenix6::')) {
+          const typeId = dRef.key.slice(10);
+          grid.innerHTML += `<div class="dev-card phoenix-placeholder" data-devkey="phoenix6::${esc(typeId)}" data-pkey="${esc(typeId)}" data-label="${esc(displayName)}">
+            <div class="dev-name"><span class="phoenix-type" style="color:var(--purple)">${esc(displayName)}</span></div>
+            <div class="phoenix-loading"><span class="spinner"></span> Loading…</div>
+          </div>`;
+        }
+      });
+
+      devGrid.appendChild(grid);
+    });
+  }
+
+  // ── Unassigned sections: hide when subsystems are defined ─────────
+  const cdGrid = document.getElementById('canDevGrid');
+  const cdSec  = document.getElementById('canDevSec');
+  const ntSec  = document.getElementById('ntSec');
+  const ntWrap = document.getElementById('ntChips');
+
+  if (hasSubs) {
+    // Hide all unassigned sections — only show subsystem-assigned devices
+    cdSec.style.display = 'none';
+    cdGrid.innerHTML = '';
+    ntSec.style.display = 'none';
+    ntWrap.innerHTML = '';
+  } else {
+    // No subsystems: show all CAN and NT as before
+    cdGrid.innerHTML = '';
+    if ((canDevices || []).length) {
+      cdSec.style.display = 'flex';
+      canDevices.forEach(dev => { cdGrid.innerHTML += canDevCard(dev); });
+    } else {
+      cdSec.style.display = 'none';
+    }
+    ntWrap.innerHTML = '';
+    const ntKeys = Object.entries(ntClients || {});
+    if (ntKeys.length) {
+      ntSec.style.display = 'flex';
+      ntKeys.forEach(([name, ok]) => {
+        ntWrap.innerHTML += `<span class="nt-chip"><span class="dot ${ok ? 'dot-g' : 'dot-r'}"></span>${esc(name)}</span>`;
+      });
+    } else {
+      ntSec.style.display = 'none';
+    }
+  }
+}
+
+// ── Phoenix6 device loading & rendering ──────────────────────────────────────
+
+async function loadHootDevices(filepath, companionFiles) {
+  const sec     = document.getElementById('phoenixSec');
+  const spinner = document.getElementById('phoenixSpinner');
+  const grid    = document.getElementById('phoenixGrid');
+
+  const hoots = (companionFiles && companionFiles.hoot_devices) || [];
+  if (!hoots.length) { sec.style.display = 'none'; return; }
+
+  sec.style.display = 'flex';
+  spinner.style.display = 'inline-block';
+  grid.innerHTML = `<div class="phoenix-loading"><i class="bi bi-hourglass-split me-1"></i>Loading Phoenix6 device data…</div>`;
+
+  try {
+    const data = await fetchJSON(`/api/hoot_devices?file=${enc(filepath)}`);
+    if (data.error) {
+      grid.innerHTML = `<div style="color:var(--red);font-size:0.8rem">Device data error: ${esc(data.error)}</div>`;
+      return;
+    }
+    renderPhoenixDevices(data);
+  } catch (e) {
+    grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem">Device data unavailable</div>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function renderPhoenixDevices(data) {
+  const devs = data.devices || [];
+  allDevices.phoenix6 = devs;
+
+  // Merge hoot fault issues into issueLines so fault pills can link to chart times.
+  // Remove any previously merged hoot issues first (avoid duplicates on re-render).
+  issueLines = issueLines.filter(i => !i._hoot);
+  (data.issues || []).forEach(iss => {
+    if ((iss.times || []).length > 0) issueLines.push({ ...iss, _hoot: true });
+  });
+
+  const sec     = document.getElementById('phoenixSec');
+  const grid    = document.getElementById('phoenixGrid');
+  const spinner = document.getElementById('phoenixSpinner');
+  spinner.style.display = 'none';
+
+  if (!devs.length) { sec.style.display = 'none'; grid.innerHTML = ''; return; }
+
+  const subs = subsystemSettings.subsystems || [];
+  const assignedKeys = new Set(subs.flatMap(s => (s.devices || []).map(d => d.key)));
+
+  const hasSubs = subs.length > 0;
+
+  // Replace subsystem placeholder cards with real data (use custom label from placeholder attr)
+  devs.forEach(dev => {
+    const typeId = `${dev.device_type}-${dev.device_id}`;
+    const placeholder = document.querySelector(`.phoenix-placeholder[data-pkey="${typeId}"]`);
+    if (placeholder) {
+      const customLabel = placeholder.dataset.label || null;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = renderPhoenixCard(dev, customLabel);
+      placeholder.replaceWith(tmp.firstChild);
+    }
+  });
+
+  // When subsystems defined: hide the unassigned phoenix section entirely
+  if (hasSubs) {
+    sec.style.display = 'none';
+    grid.innerHTML = '';
+  } else {
+    sec.style.display = 'flex';
+    grid.innerHTML = devs.map(d => renderPhoenixCard(d)).join('');
+  }
+
+  if (document.getElementById('pageSettings').classList.contains('page-active')) {
+    renderSettingsPage();
+  }
+}
+
+function renderPhoenixCard(dev, displayName) {
+  const isTalon  = dev.device_type === 'TalonFX';
+  const typeClr  = isTalon ? 'bus-can' : 'bus-rio';
+  const typeIcon = isTalon ? 'bi-lightning-charge' : 'bi-arrows-angle-expand';
+  const busLbl   = (dev.bus_label || '').includes('CANivore')
+    ? '<span class="bus-can" style="font-size:0.6rem;opacity:0.8">CANivore</span>'
+    : '<span class="bus-rio" style="font-size:0.6rem;opacity:0.8">RIO CAN</span>';
+  const rawId = `${dev.device_type}-${dev.device_id}`;
+  const shownName = displayName || rawId;
+
+  const _CURR = new Set(['SupplyCurrLimit', 'StatorCurrLimit']);
+  const hasFault = faultMode === 'sticky'
+    ? (dev.sticky_faults || []).some(f => !_CURR.has(f))
+    : (dev.faults        || []).some(f => !_CURR.has(f));
+  const currLimited = dev.current_limited && !hasFault;
+  const statusDot   = hasFault ? 'dot-y' : 'dot-g';
+  const statusTxt   = hasFault   ? `<span class="warn">${faultMode === 'sticky' ? 'Sticky Fault' : 'Fault'}</span>`
+                    : currLimited ? '<span style="color:var(--yellow)">Curr Limit</span>'
+                    : '<span class="ok">OK</span>';
+
+  let inner = `<div class="dev-name">
+    <span class="${typeClr} phoenix-type"><i class="bi ${typeIcon} me-1"></i>${esc(shownName)}</span>
+    ${busLbl}
+  </div>`;
+  inner += `<div class="dev-status"><span class="dot ${statusDot}"></span>${statusTxt}</div>`;
+
+  if (dev.max_temp_c  != null) { inner += mtr('Temp',   `${dev.max_temp_c}°C`, tempColor(dev.max_temp_c)); inner += tempBar(dev.max_temp_c); }
+  if (dev.max_stator_a != null) inner += mtr('Stator',  `${dev.max_stator_a}A`);
+  if (dev.max_supply_a != null) inner += mtr('Supply',  `${dev.max_supply_a}A`);
+  if (dev.max_torque_a != null) inner += mtr('Torque',  `${dev.max_torque_a}A`);
+  if (dev.magnet_health != null && dev.magnet_health !== 'Magnet_Green')
+    inner += mtr('Magnet', esc(dev.magnet_health), 'var(--yellow)');
+
+  // Top fault line — fault with most occurrences
+  const ftimes = faultMode === 'sticky' ? (dev.sticky_fault_times || {}) : (dev.fault_times || {});
+  const activeFaults = faultMode === 'sticky'
+    ? (dev.sticky_faults || []).filter(f => !_CURR.has(f))
+    : (dev.faults        || []).filter(f => !_CURR.has(f));
+  if (activeFaults.length) {
+    const topFault = activeFaults.slice().sort((a,b) => (ftimes[b]||[]).length - (ftimes[a]||[]).length)[0];
+    const topCount = (ftimes[topFault] || []).length;
+    const countStr = topCount > 0 ? ` <span style="opacity:0.65">×${topCount}</span>` : '';
+    inner += `<div style="font-size:0.7rem;color:var(--yellow);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>${esc(topFault)}${countStr}</div>`;
+  }
+
+  return `<div class="dev-card" data-devkey="phoenix6::${esc(rawId)}">${inner}</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Device card selection → detail panel
+// ══════════════════════════════════════════════════════════════════
+function selectDevice(devKey) {
+  selectedDeviceKey = devKey;
+
+  // Highlight selected card, clear others
+  document.querySelectorAll('#devGrid .dev-card').forEach(c => {
+    c.classList.toggle('dev-selected', c.dataset.devkey === devKey);
+  });
+
+  // Find device data + custom label from settings
+  let dev = null;
+  let displayName = devKey.replace(/^(can|nt|phoenix6)::/, '');
+  subsystemSettings.subsystems.forEach(s =>
+    (s.devices || []).forEach(d => { if (d.key === devKey && d.label) displayName = d.label; })
+  );
+
+  if (devKey.startsWith('phoenix6::')) {
+    const typeId = devKey.slice(10);
+    dev = allDevices.phoenix6.find(d => `${d.device_type}-${d.device_id}` === typeId);
+  } else if (devKey.startsWith('can::')) {
+    dev = allDevices.can.find(d => d.name === devKey.slice(5));
+  } else if (devKey.startsWith('nt::')) {
+    const name = devKey.slice(4);
+    const ntEntry = allDevices.nt.find(d => d.name === name);
+    dev = ntEntry || null;
+  }
+
+  renderDeviceDetail(devKey, dev, displayName);
+}
+
+function deselectDevice() {
+  selectedDeviceKey = null;
+  document.querySelectorAll('#devGrid .dev-card').forEach(c => c.classList.remove('dev-selected'));
+  document.getElementById('deviceDetailWrap').style.display = 'none';
+}
+
+function renderDeviceDetail(devKey, dev, displayName) {
+  const wrap = document.getElementById('deviceDetailWrap');
+  const inner = document.getElementById('deviceDetailInner');
+  if (!dev) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const CURR_LIMITS = new Set(['SupplyCurrLimit', 'StatorCurrLimit']);
+  let faults = [], stickyFaults = [], currLimited = false, infoItems = [];
+
+  if (devKey.startsWith('phoenix6::')) {
+    const rawFaults  = (dev.faults        || []).filter(f => !CURR_LIMITS.has(f));
+    const rawSticky  = (dev.sticky_faults || []).filter(f => !CURR_LIMITS.has(f));
+    if (faultMode === 'sticky') {
+      stickyFaults = rawSticky;
+    } else {
+      faults = rawFaults;
+    }
+    currLimited  = dev.current_limited && !faults.length && !stickyFaults.length;
+    if (dev.max_temp_c   != null) infoItems.push({ l: 'Peak Temp',   v: `${dev.max_temp_c}°C`,   c: tempColor(dev.max_temp_c) });
+    if (dev.max_stator_a != null) infoItems.push({ l: 'Peak Stator', v: `${dev.max_stator_a}A` });
+    if (dev.max_supply_a != null) infoItems.push({ l: 'Peak Supply', v: `${dev.max_supply_a}A` });
+    if (dev.min_supply_v != null) infoItems.push({ l: 'Min Supply',  v: `${dev.min_supply_v}V`,  c: dev.min_supply_v < 8 ? 'var(--yellow)' : '' });
+  } else if (devKey.startsWith('can::')) {
+    if (!dev.connected) faults.push('Disconnected');
+    if (dev.max_temp_c    > 0)  infoItems.push({ l: 'Peak Temp',    v: `${dev.max_temp_c}°C`,    c: tempColor(dev.max_temp_c) });
+    if (dev.max_current_a > 0)  infoItems.push({ l: 'Peak Current', v: `${dev.max_current_a}A` });
+  } else if (devKey.startsWith('nt::')) {
+    if (!dev.connected) faults.push('Connection Lost');
+  }
+
+  const infoHtml = infoItems.map(i =>
+    `<span style="font-size:0.75rem;color:var(--muted)">${esc(i.l)}: <span style="color:${i.c||'var(--text)'}">${esc(i.v)}</span></span>`
+  ).join('');
+
+  // Build fault pills — match against issueLines scoped to this device for chart annotation
+  const devId = devKey.replace(/^phoenix6::/, '');  // e.g. "TalonFX-1"
+  function findIssueIdx(faultName) {
+    return issueLines.findIndex(iss => {
+      const msg = (iss.message || '').toLowerCase().replace(/\s+/g, '');
+      const fn  = faultName.toLowerCase().replace(/\s+/g, '');
+      // Match both device scoping and fault name
+      const devMatch = !iss.device || iss.device === devId;
+      return devMatch && msg.includes(fn);
+    });
+  }
+  const faultPillsHtml = [
+    ...faults.map(f => faultPill(f, false, findIssueIdx(f))),
+    ...stickyFaults.map(f => faultPill(f, true, -1)),
+    ...(currLimited ? [`<span class="chip chip-info" style="opacity:0.7"><i class="bi bi-lightning-charge"></i>Current Limiting (normal)</span>`] : []),
+  ].join('');
+
+  const hasFaults = faults.length || stickyFaults.length;
+
+  inner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:600">Device</span>
+      <span style="font-size:0.88rem;font-weight:700">${esc(displayName)}</span>
+      ${devKey !== (displayName ? `phoenix6::${displayName}` : '') ? `<span style="font-size:0.72rem;color:var(--muted)">${esc(devKey.replace(/^(can|nt|phoenix6)::/, ''))}</span>` : ''}
+      <button onclick="deselectDevice()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0"><i class="bi bi-x-lg"></i></button>
+    </div>
+    ${infoItems.length ? `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">${infoHtml}</div>` : ''}
+    <div class="issues-header" style="margin-bottom:5px"><i class="bi bi-exclamation-circle me-1"></i>${faultMode === 'sticky' ? 'Sticky Faults' : 'Faults'}</div>
+    <div class="issue-chips">
+      ${hasFaults || currLimited ? faultPillsHtml : `<span class="no-issues"><i class="bi bi-check-circle me-1"></i>${faultMode === 'sticky' ? 'No sticky faults recorded' : 'No faults this match'}</span>`}
+    </div>`;
+}
+
+function faultPill(faultName, isSticky, matchIdx) {
+  // matchIdx: index into issueLines for chart annotation (-1 = no match)
+  const cls   = isSticky ? 'chip-warning' : 'chip-error';
+  const clickable = matchIdx >= 0 && (issueLines[matchIdx].times || []).length > 0;
+  const times = clickable ? issueLines[matchIdx].times : [];
+  const countHtml = times.length ? ` <span style="opacity:0.65">×${times.length}</span>` : '';
+  const title = clickable
+    ? `Click to show ${times.length} occurrence${times.length !== 1 ? 's' : ''} on chart`
+    : isSticky ? 'Sticky fault — no per-match timestamp' : 'No timestamp recorded';
+  return `<span class="chip ${cls}${clickable ? ' chip-has-time' : ''}" style="opacity:0.85"
+    ${clickable ? `data-idx="${matchIdx}" onclick="toggleIssueLine(${matchIdx})"` : ''}
+    title="${title}">
+    <i class="bi bi-exclamation-triangle-fill"></i>${esc(faultName)}${countHtml}
+  </span>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Fault mode toggle
+// ══════════════════════════════════════════════════════════════════
+function setFaultMode(mode) {
+  faultMode = mode;
+  // Persist in settings
+  subsystemSettings.fault_mode = mode;
+  saveSettings();
+  updateFaultModeButtons();
+  // Re-render device detail if one is selected
+  if (selectedDeviceKey) selectDevice(selectedDeviceKey);
+  // Re-render match device grid so dots update
+  if (currentData) renderPhoenixDevices();
+}
+
+function updateFaultModeButtons() {
+  const b1 = document.getElementById('faultModeBtn_faults');
+  const b2 = document.getElementById('faultModeBtn_sticky');
+  const note = document.getElementById('faultModeNote');
+  if (!b1 || !b2) return;
+  b1.classList.toggle('active', faultMode === 'faults');
+  b2.classList.toggle('active', faultMode === 'sticky');
+  if (note) {
+    note.textContent = faultMode === 'sticky'
+      ? 'Sticky faults persist across matches'
+      : 'Faults reset each match';
+  }
+}
+
+function setHidePracticeTrends(val) {
+  hidePracticeTrends = val;
+  subsystemSettings.hide_practice_trends = val;
+  saveSettings();
+  updateHidePracticeButtons();
+  // Re-render trends in-place using cached data (no re-fetch needed)
+  if (lastTrendsData) renderTrends(lastTrendsData);
+}
+
+function updateHidePracticeButtons() {
+  const bShow = document.getElementById('hidePracticeBtn_show');
+  const bHide = document.getElementById('hidePracticeBtn_hide');
+  if (!bShow || !bHide) return;
+  bShow.classList.toggle('active', !hidePracticeTrends);
+  bHide.classList.toggle('active', hidePracticeTrends);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Settings — load / save / CRUD
+// ══════════════════════════════════════════════════════════════════
+async function loadSettingsForTeam(team) {
+  try {
+    const r = await fetchJSON(`/api/settings?team=${encodeURIComponent(team)}`);
+    subsystemSettings = r;
+    lastSettingsTeam = team;
+    faultMode = r.fault_mode || 'faults';
+    hidePracticeTrends = r.hide_practice_trends || false;
+    updateFaultModeButtons();
+    updateHidePracticeButtons();
+    // Restore saved folder if present and different from current
+    if (r.folder) {
+      const folderEl = document.getElementById('folderInput');
+      if (folderEl.value.trim() !== r.folder) {
+        folderEl.value = r.folder;
+        trendsLoaded = false;  // folder changed — invalidate trends
+        await scanFolder(false);
+      }
+    }
+  } catch (e) {
+    subsystemSettings = { team, subsystems: [] };
+    lastSettingsTeam = team;
+    faultMode = 'faults';
+    hidePracticeTrends = false;
+    updateFaultModeButtons();
+    updateHidePracticeButtons();
+  }
+}
+
+async function saveSettings() {
+  const team = lastSettingsTeam || 0;
+  subsystemSettings.team = team;
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subsystemSettings),
+    });
+    const ind = document.getElementById('saveIndicator');
+    if (ind) {
+      ind.classList.add('show');
+      setTimeout(() => ind.classList.remove('show'), 1800);
+    }
+  } catch (e) { /* silent */ }
+}
+
+function genSubId() {
+  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
+function addSubsystem() {
+  const name = document.getElementById('newSubName').value.trim();
+  if (!name) { document.getElementById('newSubName').focus(); return; }
+  const icon = document.getElementById('newSubIcon').value;
+  subsystemSettings.subsystems.push({ id: genSubId(), name, icon, devices: [] });
+  document.getElementById('newSubName').value = '';
+  saveSettings();
+  renderSettingsPage();
+}
+
+function removeSubsystem(id) {
+  subsystemSettings.subsystems = subsystemSettings.subsystems.filter(s => s.id !== id);
+  saveSettings();
+  renderSettingsPage();
+  // Re-render match page devices to reflect removal
+  if (currentData) renderDevGrid(currentData.can_devices || [], currentData.nt_clients || {});
+}
+
+function assignDevice(key, kind, subId) {
+  const sub = subsystemSettings.subsystems.find(s => s.id === subId);
+  if (!sub) return;
+  // Remove from any current subsystem first
+  subsystemSettings.subsystems.forEach(s => {
+    s.devices = (s.devices || []).filter(d => d.key !== key);
+  });
+  sub.devices.push({ key, kind });
+  saveSettings();
+  renderSettingsPage();
+  // Re-render match page to show assignment
+  if (currentData) {
+    renderDevGrid(currentData.can_devices || [], currentData.nt_clients || {});
+    if (allDevices.phoenix6.length) renderPhoenixDevices({ devices: allDevices.phoenix6 });
+  }
+}
+
+function unassignDevice(key) {
+  subsystemSettings.subsystems.forEach(s => {
+    s.devices = (s.devices || []).filter(d => d.key !== key);
+  });
+  saveSettings();
+  renderSettingsPage();
+  if (currentData) {
+    renderDevGrid(currentData.can_devices || [], currentData.nt_clients || {});
+    if (allDevices.phoenix6.length) renderPhoenixDevices({ devices: allDevices.phoenix6 });
+  }
+}
+
+function renameDevice(key, newLabel) {
+  const trimmed = newLabel.trim();
+  subsystemSettings.subsystems.forEach(s => {
+    (s.devices || []).forEach(d => {
+      if (d.key === key) d.label = trimmed || null;
+    });
+  });
+  saveSettings();
+  renderSettingsPage();
+  if (currentData) {
+    renderDevGrid(currentData.can_devices || [], currentData.nt_clients || {});
+    if (allDevices.phoenix6.length) renderPhoenixDevices({ devices: allDevices.phoenix6 });
+  }
+}
+
+function startRename(e, key) {
+  e.stopPropagation();
+  e.preventDefault();
+  // Find the current label
+  let currentLabel = '';
+  subsystemSettings.subsystems.forEach(s => {
+    (s.devices || []).forEach(d => {
+      if (d.key === key) currentLabel = d.label || d.key.replace(/^(can|nt|phoenix6)::/, '');
+    });
+  });
+  // Replace the chip with an inline input
+  const chip = e.target.closest('.dchip');
+  if (!chip) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'settings-input';
+  input.value = currentLabel;
+  input.style.cssText = 'width:140px;font-size:0.75rem;padding:2px 8px;';
+  chip.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = () => { renameDevice(key, input.value); };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e2 => {
+    if (e2.key === 'Enter') { e2.preventDefault(); commit(); }
+    if (e2.key === 'Escape') { renderSettingsPage(); }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Settings — drag & drop handlers
+// ══════════════════════════════════════════════════════════════════
+function onChipDragStart(e, key) {
+  dragKey = key;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => e.target.classList.add('dragging'), 0);
+}
+function onChipDragEnd(e) {
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+function dropToSub(e, subId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragKey) return;
+  const kind = dragKey.startsWith('can::') ? 'can'
+             : dragKey.startsWith('nt::') ? 'nt' : 'phoenix6';
+  assignDevice(dragKey, kind, subId);
+  dragKey = null;
+}
+function dropToPool(e, kind) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragKey) return;
+  unassignDevice(dragKey);
+  dragKey = null;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Settings — page render
+// ══════════════════════════════════════════════════════════════════
+function renderSettingsPage() {
+  const team = lastSettingsTeam || (currentData && currentData.robot && currentData.robot.team) || '—';
+  document.getElementById('settingsTeamLabel').textContent = `Team ${team}`;
+  updateFaultModeButtons();
+
+  const assignedKeys = new Set(
+    (subsystemSettings.subsystems || []).flatMap(s => (s.devices || []).map(d => d.key))
+  );
+
+  // ── Subsystem slots (left panel) ────────────────────────────────
+  const slots = document.getElementById('subsystemSlots');
+  slots.innerHTML = '';
+  if (!subsystemSettings.subsystems.length) {
+    slots.innerHTML = '<p style="color:var(--muted);font-size:0.82rem">No subsystems yet. Add one above.</p>';
+  }
+  (subsystemSettings.subsystems || []).forEach(sub => {
+    const assigned = sub.devices || [];
+    const chipsHtml = assigned.map(dRef => {
+      const cls  = dRef.kind === 'can' ? 'dchip-can' : dRef.kind === 'nt' ? 'dchip-nt' : 'dchip-phoenix';
+      const icon = dRef.kind === 'can' ? 'bi-hdd-stack' : dRef.kind === 'nt' ? 'bi-router' : 'bi-cpu';
+      const rawLabel = dRef.key.replace(/^(can|nt|phoenix6)::/, '');
+      const shownLabel = dRef.label || rawLabel;
+      const safeKey = dRef.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `<span class="dchip ${cls}"
+        draggable="true"
+        title="${esc(rawLabel)}"
+        ondragstart="onChipDragStart(event,'${safeKey}')"
+        ondragend="onChipDragEnd(event)">
+        <i class="bi ${icon}"></i>${esc(shownLabel)}
+        <button class="dchip-x" title="Rename" onclick="startRename(event,'${safeKey}')"><i class="bi bi-pencil" style="font-size:0.7em"></i></button>
+        <button class="dchip-x" title="Remove" onclick="unassignDevice('${safeKey}')">×</button>
+      </span>`;
+    }).join('');
+
+    slots.innerHTML += `<div class="sub-slot" id="slot-${sub.id}"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('drag-over')"
+        ondrop="dropToSub(event,'${sub.id}')">
+      <div class="sub-slot-header">
+        <i class="bi ${sub.icon || 'bi-gear'}" style="color:var(--purple)"></i>
+        <span class="sub-slot-name">${esc(sub.name)}</span>
+        <button class="timer-btn" onclick="removeSubsystem('${sub.id}')" title="Delete subsystem">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+      <div class="sub-slot-body">
+        ${chipsHtml || '<span class="drop-hint">Drop devices here</span>'}
+      </div>
+    </div>`;
+  });
+
+  // ── Device pool (right panel) ────────────────────────────────────
+  renderPool('poolCAN', 'poolCANEmpty', allDevices.can.filter(d => !assignedKeys.has('can::' + d.name))
+    .map(d => ({ key: 'can::' + d.name, kind: 'can', label: d.name, icon: 'bi-hdd-stack', cls: 'dchip-can' })));
+
+  renderPool('poolPhoenix', 'poolPhoenixEmpty', allDevices.phoenix6
+    .filter(d => !assignedKeys.has(`phoenix6::${d.device_type}-${d.device_id}`))
+    .map(d => ({ key: `phoenix6::${d.device_type}-${d.device_id}`, kind: 'phoenix6',
+                 label: `${d.device_type}-${d.device_id}`, icon: 'bi-cpu', cls: 'dchip-phoenix' })));
+
+  renderPool('poolNT', 'poolNTEmpty', allDevices.nt.filter(d => !assignedKeys.has('nt::' + d.name))
+    .map(d => ({ key: 'nt::' + d.name, kind: 'nt', label: d.name, icon: 'bi-router', cls: 'dchip-nt' })));
+}
+
+function renderPool(poolId, emptyId, items) {
+  const pool = document.getElementById(poolId);
+  const empty = document.getElementById(emptyId);
+  if (!pool) return;
+  // Remove existing chips (keep the empty span)
+  [...pool.children].forEach(c => { if (!c.id) pool.removeChild(c); });
+  if (empty) empty.style.display = items.length ? 'none' : 'inline';
+  items.forEach(item => {
+    const span = document.createElement('span');
+    span.className = `dchip ${item.cls}`;
+    span.draggable = true;
+    span.innerHTML = `<i class="bi ${item.icon}"></i>${esc(item.label)}`;
+    span.addEventListener('dragstart', e => onChipDragStart(e, item.key));
+    span.addEventListener('dragend', onChipDragEnd);
+    pool.appendChild(span);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Competition Trends
+// ══════════════════════════════════════════════════════════════════
+let trendsLoaded = false;
+
+async function loadTrends() {
+  if (trendsLoaded) return;
+  const folder = document.getElementById('folderInput').value.trim();
+  document.getElementById('trendsSpinner').style.display = 'inline-block';
+  try {
+    const d = await fetchJSON(`/api/competition?folder=${enc(folder)}`);
+    if (d.error) { showError(d.error); return; }
+    lastTrendsData = d;
+    renderTrends(d);
+    trendsLoaded = true;
+  } finally {
+    document.getElementById('trendsSpinner').style.display = 'none';
+  }
+}
+
+function renderTrends(data) {
+  let ms = (data.matches || []).filter(m => !m.parse_error);
+  if (hidePracticeTrends) ms = ms.filter(m => !m.label.startsWith('P'));
+  const practiceHidden = hidePracticeTrends
+    ? (data.matches || []).filter(m => !m.parse_error && m.label.startsWith('P')).length
+    : 0;
+  const subtitle = `${ms.length} competition match${ms.length !== 1 ? 'es' : ''}` +
+    (practiceHidden > 0 ? ` (${practiceHidden} practice hidden)` : '');
+  document.getElementById('trendsSubtitle').textContent = subtitle;
+  if (!ms.length) {
+    document.getElementById('trendStrip').innerHTML = '<p style="color:var(--muted)">No competition matches found in this folder.</p>';
+    return;
+  }
+
+  const labels     = ms.map(m => m.label);
+  const battMins   = ms.map(m => m.battery_min || 0);
+  const battAvgs   = ms.map(m => m.battery_mean || 0);
+  const speedMaxes = ms.map(m => m.max_speed_mps || 0);
+  const speedAvgs  = ms.map(m => m.avg_speed_mps || 0);
+  const crits      = ms.map(m => m.critical_count || 0);
+  const warns      = ms.map(m => m.warning_count || 0);
+
+  const tempSubsystems = [...new Set(ms.flatMap(m => Object.keys(m.temps || {})))];
+  const tempDatasets = tempSubsystems.map((sub, i) => ({
+    label: sub,
+    data: ms.map(m => (m.temps || {})[sub] || 0),
+    borderColor: ['#3fb950','#e3b341','#f85149','#58a6ff','#bc8cff'][i % 5],
+    pointRadius: 3, borderWidth: 1.5, tension: 0.3,
+  }));
+
+  const totalBrownouts = ms.reduce((s, m) => s + (m.brownout_count || 0), 0);
+  const avgBattMin     = ms.reduce((s, m) => s + (m.battery_min || 0), 0) / ms.length;
+  const maxSpeed       = Math.max(...speedMaxes);
+  const totalCritical  = ms.reduce((s, m) => s + (m.critical_count || 0), 0);
+  const matchesWithBO  = ms.filter(m => (m.brownout_count || 0) > 0).length;
+  const avgCanUtil     = ms.reduce((s, m) => s + (m.can_util_max || 0), 0) / ms.length;
+
+  document.getElementById('trendStrip').innerHTML = [
+    { label: 'Matches',        val: ms.length,                       sub: '',                                cls: '' },
+    { label: 'Avg Batt Min',   val: avgBattMin.toFixed(2) + 'V',     sub: `${matchesWithBO} matches with brownout`, cls: matchesWithBO > 0 ? 'warn' : 'ok' },
+    { label: 'Total Brownouts',val: totalBrownouts,                   sub: `across ${matchesWithBO} matches`, cls: totalBrownouts > 0 ? 'crit' : 'ok' },
+    { label: 'Max Speed',      val: maxSpeed.toFixed(2) + ' m/s',    sub: 'peak across all matches',         cls: '' },
+    { label: 'Critical Issues',val: totalCritical,                    sub: 'across all matches',              cls: totalCritical > 0 ? 'crit' : 'ok' },
+    { label: 'Avg CAN Util',   val: (avgCanUtil * 100).toFixed(0) + '%', sub: 'across all matches',          cls: avgCanUtil > 0.65 ? 'warn' : 'ok' },
+  ].map(s => `<div class="tstat">
+    <div class="tstat-label">${s.label}</div>
+    <div class="tstat-val ${s.cls}">${s.val}</div>
+    <div class="tstat-sub">${s.sub}</div>
+  </div>`).join('');
+
+  destroyChart('tBattChart');
+  charts.tBattChart = new Chart(document.getElementById('tBattChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Min V', data: battMins, backgroundColor: battMins.map(v => v < 6.5 ? '#f85149' : v < 8 ? '#e3b341' : '#3fb950'), borderRadius: 3 },
+        { label: 'Avg V', data: battAvgs, type: 'line', borderColor: '#58a6ff', backgroundColor: 'transparent', pointRadius: 3, borderWidth: 1.5, tension: 0.3 },
+      ]
+    },
+    options: mkBarOpts(4, 14, 'V'),
+  });
+
+  destroyChart('tSpeedChart');
+  charts.tSpeedChart = new Chart(document.getElementById('tSpeedChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Max m/s', data: speedMaxes, backgroundColor: '#3fb950', borderRadius: 3 },
+        { label: 'Avg m/s', data: speedAvgs, type: 'line', borderColor: '#e3b341', backgroundColor: 'transparent', pointRadius: 3, borderWidth: 1.5, tension: 0.3 },
+      ]
+    },
+    options: mkBarOpts(0, null, 'm/s'),
+  });
+
+  destroyChart('tTempChart');
+  if (tempDatasets.length > 0) {
+    charts.tTempChart = new Chart(document.getElementById('tTempChart').getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets: tempDatasets },
+      options: mkBarOpts(0, 100, '°C'),
+    });
+  }
+
+  destroyChart('tIssueChart');
+  charts.tIssueChart = new Chart(document.getElementById('tIssueChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Critical', data: crits, backgroundColor: '#f85149', borderRadius: 3 },
+        { label: 'Warning',  data: warns, backgroundColor: '#e3b341', borderRadius: 3 },
+      ]
+    },
+    options: mkBarOpts(0, null, '', true),
+  });
+
+  const tbody = document.getElementById('matchTableBody');
+  tbody.innerHTML = '';
+  ms.forEach(m => {
+    const bv = m.battery_min || 0;
+    const bc = bv < 6.5 ? 'crit' : bv < 8 ? 'warn' : 'ok';
+    const rowClass = m.critical_count > 0 ? 'row-crit' : m.warning_count > 0 ? 'row-warn' : 'row-ok';
+    const topTemps = Object.entries(m.temps || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([sub, t]) => `<span style="color:${tempColor(t)}" title="${sub}">${t}°C</span>`)
+      .join(' ');
+    const boCell = m.brownout_count > 0 ? `<span class="crit">⚡ ${m.brownout_count}</span>` : '0';
+    const canPct = ((m.can_util_max || 0) * 100).toFixed(0);
+    const spdPct = Math.min(100, ((m.max_speed_mps || 0) / 5) * 100).toFixed(0);
+    const tr = document.createElement('tr');
+    tr.className = rowClass;
+    tr.innerHTML = `
+      <td><strong>${esc(m.label)}</strong></td>
+      <td class="${bc}">${bv.toFixed(2)}V</td>
+      <td>${boCell}</td>
+      <td>${(m.max_speed_mps||0).toFixed(2)}<div class="mini-bar-wrap"><div class="mini-bar" style="width:${spdPct}%;background:var(--green)"></div></div></td>
+      <td>${(m.avg_speed_mps||0).toFixed(2)}</td>
+      <td class="${+canPct > 80 ? 'crit' : +canPct > 65 ? 'warn' : ''}">${canPct}%</td>
+      <td class="${(m.loop_overruns||0) > 15 ? 'warn' : ''}">${m.loop_overruns||0}</td>
+      <td>${topTemps || '—'}</td>
+      <td class="${(m.network_issues||0) > 0 ? 'warn' : ''}">${m.network_issues||0}</td>
+      <td>${m.warning_count > 0 ? `<span class="warn">${m.warning_count}</span>` : 0}</td>
+      <td>${m.critical_count > 0 ? `<span class="crit">${m.critical_count}</span>` : 0}</td>`;
+    tr.addEventListener('click', () => {
+      document.getElementById('matchSelect').value = m.file
+        ? [...document.getElementById('matchSelect').options].find(o => o.text.startsWith(m.label))?.value || ''
+        : '';
+      document.querySelectorAll('.mtable tr.sel').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Chart helpers
+// ══════════════════════════════════════════════════════════════════
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function mkLineOpts(yMin, yMax, yLabel) {
+  return {
+    animation: false, responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#8b949e', maxTicksLimit: 7, font: { size: 9 } }, grid: { color: '#21262d' },
+           title: { display: true, text: 'Time (s)', color: '#8b949e', font: { size: 9 } } },
+      y: { min: yMin, ...(yMax ? { max: yMax } : {}),
+           ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: '#21262d' },
+           title: { display: true, text: yLabel, color: '#8b949e', font: { size: 9 } } },
+    }
+  };
+}
+
+function mkBarOpts(yMin, yMax, yLabel, stacked = false) {
+  return {
+    animation: false, responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: '#8b949e', font: { size: 9 }, boxWidth: 10 } } },
+    scales: {
+      x: { stacked, ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: '#21262d' } },
+      y: { stacked, min: yMin, ...(yMax ? { max: yMax } : {}),
+           ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: '#21262d' } },
+    }
+  };
+}
+
+function issueLinesPlugin() {
+  return {
+    id: 'issueLines',
+    afterDraw(chart) {
+      if (!activeIssueLines.size) return;
+      const {ctx, scales: {x, y}, data} = chart;
+      const parsedLabels = data.labels.map(l => parseFloat(l));
+      activeIssueLines.forEach(idx => {
+        const issue = issueLines[idx];
+        if (!issue) return;
+        const visibleTimes = getVisibleTimes(issue);
+        if (!visibleTimes.length) return;
+        const col = issue.severity === 'critical' ? '#f85149'
+                  : issue.severity === 'error'    ? '#fb8500'
+                  : issue.severity === 'warning'  ? '#e3b341'
+                  :                                 '#58a6ff';
+        visibleTimes.forEach((t, occIdx) => {
+          let bestIdx = 0, bestDist = Infinity;
+          parsedLabels.forEach((lv, i) => {
+            const d = Math.abs(lv - t);
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+          });
+          const xPx = x.getPixelForValue(bestIdx);
+          if (isNaN(xPx) || xPx < x.left - 1 || xPx > x.right + 1) return;
+          ctx.save();
+          ctx.globalAlpha = 0.85;
+          ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+          ctx.beginPath(); ctx.moveTo(xPx, y.top); ctx.lineTo(xPx, y.bottom); ctx.stroke();
+          if (occIdx === 0 || visibleTimes.length <= 6) {
+            ctx.setLineDash([]);
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(xPx, y.top + 5, 3.5, 0, Math.PI * 2); ctx.fill();
+            ctx.font = 'bold 8px sans-serif'; ctx.fillStyle = col;
+            ctx.textAlign = 'center';
+            ctx.fillText(t.toFixed(1) + 's', xPx, y.top + 17);
+          }
+          ctx.restore();
+        });
+      });
+    }
+  };
+}
+
+function threshPlugin(thresholds, timing) {
+  return {
+    id: 'thresh_' + Math.random(),
+    afterDraw(chart) {
+      const {ctx, scales: {x, y}, data} = chart;
+      const labels = data.labels;
+      const xForTime = (t) => {
+        let best = 0, bestD = Infinity;
+        labels.forEach((lbl, i) => { const d = Math.abs(parseFloat(lbl) - t); if (d < bestD) { bestD = d; best = i; } });
+        return x.getPixelForValue(best);
+      };
+      if (timing) {
+        (timing.enable_periods || []).forEach(p => {
+          const x0 = xForTime(p.start), x1 = xForTime(p.end);
+          if (isNaN(x0) || isNaN(x1)) return;
+          ctx.save();
+          if (p.auto) {
+            ctx.fillStyle = 'rgba(88,166,255,0.13)';
+            ctx.fillRect(x0, y.top, x1 - x0, y.bottom - y.top);
+            ctx.strokeStyle = 'rgba(88,166,255,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(x0, y.top); ctx.lineTo(x1, y.top); ctx.stroke();
+            ctx.fillStyle = 'rgba(88,166,255,0.75)'; ctx.font = 'bold 9px sans-serif';
+            ctx.textAlign = 'left'; ctx.fillText('AUTO', x0 + 4, y.top + 11);
+          } else {
+            ctx.fillStyle = 'rgba(63,185,80,0.07)';
+            ctx.fillRect(x0, y.top, x1 - x0, y.bottom - y.top);
+          }
+          ctx.restore();
+        });
+      }
+      thresholds.forEach(([v, col, lbl]) => {
+        const yPx = y.getPixelForValue(v);
+        if (yPx < y.top || yPx > y.bottom) return;
+        ctx.save();
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(x.left, yPx); ctx.lineTo(x.right, yPx); ctx.stroke();
+        if (lbl) {
+          ctx.fillStyle = col; ctx.font = 'bold 9px sans-serif';
+          ctx.fillText(lbl, x.left + 4, yPx - 3);
+        }
+        ctx.restore();
+      });
+    }
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UI helpers
+// ══════════════════════════════════════════════════════════════════
+function dot(connected, label) {
+  const dc = connected === null || connected === undefined ? 'dot-x' : connected ? 'dot-g' : 'dot-r';
+  const tc = connected === false ? 'crit' : connected ? 'ok' : '';
+  return `<div class="dev-status"><span class="dot ${dc}"></span><span class="${tc}">${esc(label)}</span></div>`;
+}
+function mtr(label, val, col = '') {
+  return `<div class="dev-metric">${esc(label)}: <span style="${col ? 'color:' + col : ''}">${esc(val)}</span></div>`;
+}
+function tempBar(t) {
+  const pct = Math.min(100, (t / 100) * 100).toFixed(0);
+  return `<div class="temp-bar" style="width:${pct}%;background:${tempColor(t)}"></div>`;
+}
+function tempColor(t) { return t > 85 ? '#f85149' : t > 70 ? '#e3b341' : '#3fb950'; }
+
+function setLoading(on) {
+  const b = document.getElementById('loadingBar');
+  b.style.width = on ? '65%' : '100%';
+  if (!on) setTimeout(() => { b.style.width = '0'; }, 400);
+}
+function showError(msg) {
+  document.getElementById('errorMsg').textContent = msg;
+  document.getElementById('errorBanner').style.display = 'block';
+  setTimeout(hideError, 8000);
+}
+function hideError() { document.getElementById('errorBanner').style.display = 'none'; }
+function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function enc(s) { return encodeURIComponent(s); }
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+</script>
+</body>
+</html>
